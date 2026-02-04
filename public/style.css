@@ -21,6 +21,8 @@ body {
   background: #f7f7f7;
   padding: 16px;
   border-right: 1px solid #ddd;
+  overflow-y: auto;
+  height: 100vh;
 }
 
 .sidebar h2 {

@@ -1,9 +1,10 @@
 
-// EMPLOYEE DATA FROM DATABASE
+// employee data
 
 let employees = [];
 
 // Fetch employees from the database
+
 async function loadEmployees() {
   try {
     const response = await fetch('/api/employees');
@@ -141,7 +142,59 @@ function initMiniMap() {
   }, 10);
 }
 
+// PRINT MAP TO PDF
+
+const printBtn = document.querySelector(".print-btn");
+const mapContainer = document.getElementById("map");
+
+if (printBtn) {
+  printBtn.addEventListener("click", async function() {
+    printBtn.disabled = true;
+    const originalText = printBtn.textContent;
+    printBtn.textContent = "Processing...";
+
+    try {
+      const mapEl = document.getElementById("map");
+      if (!mapEl) throw new Error("Map element not found");
+
+      // Capture the map container (tiles, markers, popups)
+      const canvas = await html2canvas(mapEl, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        allowTaint: true
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const { jsPDF } = window.jspdf;
+
+      const pdf = new jsPDF({
+        orientation: canvas.height > canvas.width ? "portrait" : "landscape",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save("map.pdf");
+
+      printBtn.textContent = "Downloaded";
+    } catch (err) {
+      console.error("Print error:", err);
+      alert("Could not generate PDF. If tiles are blocked by CORS, try a different method (leaflet-image) or enable CORS on tile server.");
+      printBtn.textContent = originalText;
+    } finally {
+      printBtn.disabled = false;
+      setTimeout(() => { printBtn.textContent = originalText; }, 1200);
+    }
+  });
+}
+
+
 // Address autocomplete using Nominatim (via backend proxy)
+
 addressInput.addEventListener("input", async (e) => {
   const query = e.target.value.trim();
   
@@ -214,7 +267,7 @@ employeeForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    const response = await fetch("/api/employees", {
+    const response = await fetch("/api/add", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -259,52 +312,5 @@ window.onclick = function(event) {
 }
 
 
-// PRINT MAP TO PDF
 
-const printBtn = document.querySelector(".print-btn");
-const mapContainer = document.getElementById("map");
 
-if (printBtn) {
-  printBtn.addEventListener("click", async function() {
-    printBtn.disabled = true;
-    const originalText = printBtn.textContent;
-    printBtn.textContent = "Processing...";
-
-    try {
-      const mapEl = document.getElementById("map");
-      if (!mapEl) throw new Error("Map element not found");
-
-      // Capture the map container (tiles, markers, popups)
-      const canvas = await html2canvas(mapEl, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
-        allowTaint: true
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const { jsPDF } = window.jspdf;
-
-      const pdf = new jsPDF({
-        orientation: canvas.height > canvas.width ? "portrait" : "landscape",
-        unit: "mm",
-        format: "a4"
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save("map.pdf");
-
-      printBtn.textContent = "Downloaded";
-    } catch (err) {
-      console.error("Print error:", err);
-      alert("Could not generate PDF. If tiles are blocked by CORS, try a different method (leaflet-image) or enable CORS on tile server.");
-      printBtn.textContent = originalText;
-    } finally {
-      printBtn.disabled = false;
-      setTimeout(() => { printBtn.textContent = originalText; }, 1200);
-    }
-  });
-}
