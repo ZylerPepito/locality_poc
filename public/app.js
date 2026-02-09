@@ -485,55 +485,65 @@ if (printBtn) {
 // Address autocomplete using Nominatim (via backend proxy)
 // xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-addressInput.addEventListener("input", async (e) => {
+let addressSearchTimeout = null;
+let addressAbortController = null;
+
+addressInput.addEventListener("input", (e) => {
   const query = e.target.value.trim();
-  
+
+  if (addressSearchTimeout) clearTimeout(addressSearchTimeout);
+  if (addressAbortController) addressAbortController.abort();
+
   if (query.length < 3) {
     suggestionsEl.classList.remove("active");
     return;
   }
 
-  try {
-    const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
-    
-    if (!response.ok) {
-      throw new Error("Failed to fetch suggestions");
-    }
-    
-    const results = await response.json();
-
-    suggestionsEl.innerHTML = "";
-
-    if (results.length > 0) {
-      results.forEach(result => {
-        const li = document.createElement("li");
-        li.textContent = result.display_name;
-        li.addEventListener("click", () => {
-          addressInput.value = result.display_name;
-          latInput.value = result.lat;
-          lngInput.value = result.lon;
-          suggestionsEl.classList.remove("active");
-
-          // Update mini map marker position
-          if (miniMap && miniMapMarker) {
-            const newLat = parseFloat(result.lat);
-            const newLng = parseFloat(result.lon);
-            miniMap.setView([newLat, newLng], 16);
-            miniMapMarker.setLatLng([newLat, newLng]);
-          }
-        });
-        suggestionsEl.appendChild(li);
+  addressSearchTimeout = setTimeout(async () => {
+    try {
+      addressAbortController = new AbortController();
+      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+        signal: addressAbortController.signal
       });
-      suggestionsEl.classList.add("active");
-    } else {
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch suggestions");
+      }
+
+      const results = await response.json();
+      suggestionsEl.innerHTML = "";
+
+      if (results.length > 0) {
+        results.forEach(result => {
+          const li = document.createElement("li");
+          li.textContent = result.display_name;
+          li.addEventListener("click", () => {
+            addressInput.value = result.display_name;
+            latInput.value = result.lat;
+            lngInput.value = result.lon;
+            suggestionsEl.classList.remove("active");
+
+            if (miniMap && miniMapMarker) {
+              const newLat = parseFloat(result.lat);
+              const newLng = parseFloat(result.lon);
+              miniMap.setView([newLat, newLng], 16);
+              miniMapMarker.setLatLng([newLat, newLng]);
+            }
+          });
+          suggestionsEl.appendChild(li);
+        });
+        suggestionsEl.classList.add("active");
+      } else {
+        suggestionsEl.classList.remove("active");
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error("Geocoding error:", error);
+      }
       suggestionsEl.classList.remove("active");
     }
-  } catch (error) {
-    console.error("Geocoding error:", error);
-    suggestionsEl.classList.remove("active");
-  }
+  }, 350); // debounce delay
 });
-
 // Close suggestions when clicking elsewhere
 document.addEventListener("click", (e) => {
   if (e.target !== addressInput) {

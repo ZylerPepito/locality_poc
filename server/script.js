@@ -104,7 +104,7 @@ router.put("/archive/:id", (req, res) => {
 );  
 } );
 
-// GET - Geocode address (using Nominatim)
+// SUGGESTIONS FOR ADDRESS INPUT  geocoding endpoint using nominatim (only cebu)
 router.get("/geocode", async (req, res) => {
   const query = req.query.q;
 
@@ -113,7 +113,21 @@ router.get("/geocode", async (req, res) => {
   }
 
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+    // Cebu-biased viewbox (soft bias: still allows global results)
+    const viewbox = "123.6,10.5,124.2,9.9"; // west, north, east, south
+    const url =
+      `https://nominatim.openstreetmap.org/search?format=json` +
+      `&q=${encodeURIComponent(query)}` +
+      `&limit=5` +
+      `&viewbox=${viewbox}` +
+      `&bounded=0` +
+      `&accept-language=en`;
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "employee-map-app/1.0"
+      }
+    });
     const results = await response.json();
     res.json(results);
   } catch (error) {
