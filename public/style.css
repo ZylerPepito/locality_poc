@@ -54,6 +54,44 @@ body {
 .employee:hover {
   background: #e0e0e0;
 }
+.employee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  cursor: default;
+}
+
+.employee-name {
+  flex: 1;
+  cursor: pointer;
+}
+
+.employee-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.employee-actions button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.employee-actions button:hover {
+  background: #ddd;
+}
+
+.edit-btn {
+  color: #007bff;
+}
+
+.delete-btn {
+  color: #dc3545;
+}
 
 /* Map */
 .map-container {
