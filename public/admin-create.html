@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="admin-create.css" />
+  <title>Admin - Create Users</title>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1>User Management</h1>
+      <div class="header-actions">
+        <a href="/" class="link-btn">Back to App</a>
+        <button id="logoutBtn" class="logout-btn">Logout</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Create User</h2>
+      <form id="createUserForm" class="form">
+        <input type="text" id="newUsername" placeholder="Username" required />
+        <input type="password" id="newPassword" placeholder="Password" required />
+        <button type="submit">Create</button>
+        <p id="createMessage" class="message"></p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Existing Users</h2>
+      <table class="table" id="usersTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Created</th>
+            <th>Update</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+      <p id="listMessage" class="message"></p>
+    </section>
+  </div>
+
+  <script src="admin-create.js"></script>
+</body>
+</html>

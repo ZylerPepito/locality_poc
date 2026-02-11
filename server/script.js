@@ -1,10 +1,139 @@
 const express = require("express");
 const router = express.Router();
 const db = require("./db");
+const bcrypt = require("bcrypt");
+
+const ADMIN_USERNAME = "poc@admin";
+
+function requireAdmin(req, res, next) {
+  if (!req.session || !req.session.username) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (req.session.username !== ADMIN_USERNAME) {
+    return res.status(403).json({ error: "Not authorized" });
+  }
+  next();
+}
+
+// AUTH: login only
+router.post("/auth/login", (req, res) => {
+  const { username, password } = req.body;
+
+  const sql = "SELECT id, username, password_hash FROM users WHERE username = ?";
+  db.query(sql, [username], async (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    if (results.length === 0) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    const user = results[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+
+    if (!match) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    res.json({ message: "Login successful" });
+  });
+});
+
+// AUTH: logout
+router.post("/auth/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.json({ message: "Logged out" });
+  });
+});
+
+// ADMIN - list users
+router.get("/admin/users", requireAdmin, (req, res) => {
+  const sql = "SELECT id, username, created_at FROM users ORDER BY id DESC";
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    res.json(results);
+  });
+});
+
+// ADMIN - create user
+router.post("/admin/users", requireAdmin, async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password required" });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const sql = "INSERT INTO users (username, password_hash) VALUES (?, ?)";
+    db.query(sql, [username, hash], (err, result) => {
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({ error: "Username already exists" });
+        }
+        return res.status(500).json({ error: "Database error" });
+      }
+      res.status(201).json({ id: result.insertId, username });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+// ADMIN - update user (username and/or password)
+router.put("/admin/users/:id", requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+  const { username, password } = req.body;
+
+  if (!username && !password) {
+    return res.status(400).json({ error: "Username or password required" });
+  }
+
+  try {
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      const sql = username
+        ? "UPDATE users SET username = ?, password_hash = ? WHERE id = ?"
+        : "UPDATE users SET password_hash = ? WHERE id = ?";
+      const values = username ? [username, hash, userId] : [hash, userId];
+      db.query(sql, values, (err, result) => {
+        if (err) {
+          if (err.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ error: "Username already exists" });
+          }
+          return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ message: "User updated" });
+      });
+    } else {
+      const sql = "UPDATE users SET username = ? WHERE id = ?";
+      db.query(sql, [username, userId], (err, result) => {
+        if (err) {
+          if (err.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ error: "Username already exists" });
+          }
+          return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ message: "User updated" });
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+// ADMIN - delete user
+router.delete("/admin/users/:id", requireAdmin, (req, res) => {
+  const userId = req.params.id;
+  const sql = "DELETE FROM users WHERE id = ?";
+  db.query(sql, [userId], (err, result) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    res.json({ message: "User deleted", affectedRows: result.affectedRows });
+  });
+});
 
 // GET all employees that are not archived
 router.get("/employees", (req, res) => {
-  const sql = "SELECT * FROM employees WHERE is_archived = 0"; // only ones that are not archived
+  const sql = "SELECT * FROM employees WHERE is_archived = 0";
   db.query(sql, (err, results) => {
     if (err) return res.status(500).json(err);
     res.json(results);
@@ -12,7 +141,6 @@ router.get("/employees", (req, res) => {
 });
 
 // GET all archived employees
-
 router.get("/employees/archived", (req, res) => {
   const sql = "SELECT * FROM employees WHERE is_archived = 1";
   db.query(sql, (err, results) => {
@@ -21,23 +149,19 @@ router.get("/employees/archived", (req, res) => {
   });
 });
 
-// UNARCHIVE - unarchive employee by ID 
-
+// UNARCHIVE - unarchive employee by ID
 router.put("/unarchive/:id", (req, res) => {
   const employeeId = req.params.id;
   const sql = "UPDATE employees SET is_archived = 0 WHERE id = ?";
   db.query(sql, [employeeId], (err, result) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee unarchived", affectedRows: result.affectedRows });
-  }
-);
-} );  
+  });
+});
 
 // POST - Add new employee
 router.post("/add", (req, res) => {
   const { name, position, address, exactAddress, latitude, longitude, photoData, photoName } = req.body;
-
-  console.log("Received data:", { name, position, address, exactAddress, latitude, longitude });
 
   if (!name || !position || !address || !exactAddress || latitude === undefined || longitude === undefined) {
     return res.status(400).json({ error: "All fields are required" });
@@ -48,10 +172,9 @@ router.post("/add", (req, res) => {
 
   db.query(sql, values, (err, result) => {
     if (err) {
-      console.error("Database error:", err);
       return res.status(500).json({ error: err.message || "Database error" });
     }
-    res.status(201).json({ 
+    res.status(201).json({
       id: result.insertId,
       name,
       position,
@@ -66,7 +189,6 @@ router.post("/add", (req, res) => {
 });
 
 // DELETE - delete employee by ID
-
 router.delete("/delete/:id", (req, res) => {
   const employeeId = req.params.id;
   const sql = "DELETE FROM employees WHERE id = ?";
@@ -74,10 +196,9 @@ router.delete("/delete/:id", (req, res) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee deleted", affectedRows: result.affectedRows });
   });
-}); 
+});
 
 // EDIT - update employee by ID
-
 router.put("/edit/:id", (req, res) => {
   const employeeId = req.params.id;
   const { name, position, address, exactAddress, latitude, longitude, photoData, photoName } = req.body;
@@ -86,12 +207,10 @@ router.put("/edit/:id", (req, res) => {
   db.query(sql, [name, position, address, exactAddress, latitude, longitude, photoData || null, photoName || null, employeeId], (err, result) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee updated", affectedRows: result.affectedRows });
-  }
-  );  
+  });
 });
 
-// ARCHIVE - archive employee by ID (soft delete)
-
+// ARCHIVE - archive employee by ID
 router.put("/archive/:id", (req, res) => {
   const employeeId = req.params.id;
   const sql = "UPDATE employees SET is_archived = 1 WHERE id = ?";
@@ -99,12 +218,10 @@ router.put("/archive/:id", (req, res) => {
   db.query(sql, [employeeId], (err, result) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee archived", affectedRows: result.affectedRows });
-  }
+  });
+});
 
-);  
-} );
-
-// SUGGESTIONS FOR ADDRESS INPUT  geocoding endpoint using nominatim (only cebu)
+// GET - Geocode address (using Nominatim)
 router.get("/geocode", async (req, res) => {
   const query = req.query.q;
 
@@ -113,8 +230,7 @@ router.get("/geocode", async (req, res) => {
   }
 
   try {
-    // Cebu-biased viewbox (soft bias: still allows global results)
-    const viewbox = "123.6,10.5,124.2,9.9"; // west, north, east, south
+    const viewbox = "123.6,10.5,124.2,9.9";
     const url =
       `https://nominatim.openstreetmap.org/search?format=json` +
       `&q=${encodeURIComponent(query)}` +
@@ -124,9 +240,7 @@ router.get("/geocode", async (req, res) => {
       `&accept-language=en`;
 
     const response = await fetch(url, {
-      headers: {
-        "User-Agent": "employee-map-app/1.0"
-      }
+      headers: { "User-Agent": "employee-map-app/1.0" }
     });
     const results = await response.json();
     res.json(results);
